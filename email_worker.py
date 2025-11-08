@@ -46,7 +46,7 @@ Service.
         """
         
         print(f"Generated email for {creator_name}")
-        return {"email_content": email_content}
+        return {"email_content": email_content or "Default email content"}
 
     print("Email worker started")
     await worker.work()
