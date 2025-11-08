@@ -1,4 +1,8 @@
 from pyzeebe import ZeebeWorker
+import re
+
+banned_words = ["hate", "violence", "nsfw", "fake", "scam"]
+banned_categories = ["health", "finance"]
 
 def register_tasks(worker: ZeebeWorker):
     
@@ -14,15 +18,23 @@ def register_tasks(worker: ZeebeWorker):
         return {"eligibility_status": eligibility_status}
 
     @worker.task(task_type="verify-compliance")
-    def verify_compliance(channel_category: str):
-        if channel_category is None:
-            compliance_status = False
-            print("No category provided → not compliant")
-        elif channel_category == "education":
-            compliance_status = False
-            print(f"Category '{channel_category}' → not compliant")
-        else:
-            compliance_status = True
-            print(f"Category '{channel_category}' → compliant")
+    def verify_compliance(creator_name: str, channel_name: str, channel_description: str, channel_category: str):
+        content = f"{creator_name} {channel_name} {channel_description}".lower()
+
+        # Regex to look only for separate words in banned words
+        pattern = r"\b(" + "|".join(banned_words) + r")\b"
+        has_banned_word = bool(re.search(pattern, content))
+        
+        category_ok = channel_category.lower() not in banned_categories
+
+        compliance_status = not has_banned_word and category_ok
+
+        # Logs
+        if has_banned_word:
+            print(f"❌ Banned word found in content: {content}")
+        if not category_ok:
+            print(f"❌ Category '{channel_category}' is restricted")
+        if compliance_status:
+            print("✅ Channel is compliant")
     
         return {"compliance_status": compliance_status}
