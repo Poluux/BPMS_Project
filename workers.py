@@ -58,7 +58,7 @@ def register_tasks(worker: ZeebeWorker):
         current_date = None
 
         # Checking information
-        if(full_name != None and card_number != None and activate_checkbox == True):
+        if(full_name != "" and card_number != "" and activate_checkbox == True):
             adSense_status = True
             print("All fields are completed and checkboxe is checked, Monetization is activated")
         else:
