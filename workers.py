@@ -52,7 +52,7 @@ def register_tasks(worker: ZeebeWorker):
         }
     
     # Script to check AdSense link is good + call an API to get the date + create file with creator information
-    @worker.task(task_type="checkAdSense")
+    @worker.task(task_type="check-AdSense")
     def checkAdSense_callDateWebAPI_createFile(full_name: str, card_number: str, activate_checkbox: bool, creator_name: str, monthly_views: int, subscribers: int):
         adSense_status = None
         current_date = None
