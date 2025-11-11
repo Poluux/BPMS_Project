@@ -27,10 +27,6 @@ def register_tasks(worker: ZeebeWorker):
             print("✅ Channel is compliant")
         return {"compliance_status": compliance_status}
 
-from pyzeebe import ZeebeWorker
-
-def register_tasks(worker: ZeebeWorker):
-
     @worker.task(task_type="sendRecommendation.result")
     def process_sendgrid_result(subject: str, sendgrid_result: dict = None):
         if not subject or subject.strip() == "":
