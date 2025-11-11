@@ -67,10 +67,10 @@ def register_tasks(worker: ZeebeWorker):
 
         # Web API call to get current date
         try:
-            response = requests.get("http://worldclockapi.com/api/json/utc/now", timeout=5)
+            response = requests.get("http://worldtimeapi.org/api/timezone/Etc/UTC", timeout=5)
             response.raise_for_status()
             data = response.json()
-            current_date = data.get("currentDateTime")
+            current_date = data.get("datetime")
         except Exception as e:
             print(f"❌ Error fetching date: {e}")
 
