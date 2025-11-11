@@ -2,6 +2,7 @@ from pyzeebe import ZeebeWorker
 import re
 from pathlib import Path
 import requests
+import time
 
 banned_words = ["hate", "violence", "nsfw", "fake", "scam"]
 banned_categories = ["health", "finance"]
@@ -65,14 +66,21 @@ def register_tasks(worker: ZeebeWorker):
             adSense_status = False
             print("Some fields are empty or the checkboxe was not checked")
 
-        # Web API call to get current date
-        try:
-            response = requests.get("http://worldtimeapi.org/api/timezone/Etc/UTC", timeout=5)
-            response.raise_for_status()
-            data = response.json()
-            current_date = data.get("datetime")
-        except Exception as e:
-            print(f"❌ Error fetching date: {e}")
+        # 🌐 Web API call to get current date with retry
+        for attempt in range(3):  # try 3 times
+            try:
+                response = requests.get("https://timeapi.io/api/Time/current/zone?timeZone=UTC")
+                response.raise_for_status()
+                data = response.json()
+                current_date = data.get("datetime")
+                print(f"✅ Date retrieved from API: {current_date}")
+                break  # success, exit loop
+            except Exception as e:
+                print(f"❌ Error fetching date (attempt {attempt+1}/3): {e}")
+                time.sleep(1)
+        else:
+            print("⚠️ Could not retrieve date from API, using fallback 'nodate'")
+            current_date = None
 
         # Creation of file output
         content = (
