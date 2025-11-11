@@ -25,75 +25,45 @@ def register_tasks(worker: ZeebeWorker):
             print(f"Banned word found: {content}")
         if not category_ok:
             print(f"Category '{channel_category}' restricted")
-        if compliance_status:
-            print("✅ Channel is compliant")
+        print(f"✅ Compliance result: {compliance_status}")
         return {"compliance_status": compliance_status}
-
-    from pyzeebe import ZeebeWorker, BpmnError
-
-def register_tasks(worker: ZeebeWorker):
 
     @worker.task(task_type="sendRecommendation.result")
     def process_sendgrid_result(subject: str, sendgrid_result: dict = None):
         if not subject or subject.strip() == "":
             print("[Script Task] Subject vide ! Renvoi vers Write recommendations.")
-            # 🔥 Déclenche une erreur BPMN avec un code spécifique
-            raise BpmnError("INVALID_SUBJECT", "Le sujet de l'email est vide.")
+            # Lever une exception standard
+            raise Exception("INVALID_SUBJECT: subject is empty")
 
         status = "failed"
         message_id = None
-
-        if sendgrid_result is not None and isinstance(sendgrid_result, dict) and sendgrid_result.get("status") == "success":
+        if sendgrid_result and isinstance(sendgrid_result, dict) and sendgrid_result.get("status") == "success":
             status = "success"
             message_id = sendgrid_result.get("message_id")
 
         print(f"[Script Task] Email send status: {status}, message_id: {message_id}")
-        return {
-            "emailStatus": status,
-            "emailMessageId": message_id
-        }
+        return {"emailStatus": status, "emailMessageId": message_id}
 
-    
-    # Script to check AdSense link is good + call an API to get the date + create file with creator information
     @worker.task(task_type="check-AdSense")
     def checkAdSense_callDateWebAPI_createFile(full_name: str, card_number: str, activate_checkbox: bool, creator_name: str, monthly_views: int, subscribers: int):
-        adSense_status = None
-        current_date = None
-
-        # Checking information
-        if(full_name != "" and card_number != "" and activate_checkbox == True):
-            adSense_status = True
-            print("All fields are completed and checkboxe is checked, Monetization is activated")
+        adSense_status = True if (full_name and card_number and activate_checkbox) else False
+        if adSense_status:
+            print("✅ All fields complete. Monetization activated.")
         else:
-            adSense_status = False
-            print("Some fields are empty or the checkboxe was not checked")
-
-        # Web API call to get current date
+            print("❌ Some fields missing or checkbox unchecked.")
+        current_date = None
         try:
             response = requests.get("http://worldtimeapi.org/api/timezone/Etc/UTC", timeout=5)
             response.raise_for_status()
-            data = response.json()
-            current_date = data.get("datetime")
+            current_date = response.json().get("datetime")
         except Exception as e:
             print(f"❌ Error fetching date: {e}")
-
-        # Creation of file output
-        content = (
-        f"Creator: {creator_name}\n"
-        f"Monthly Views: {monthly_views}\n"
-        f"Subscribers: {subscribers}\n"
-        f"Date: {current_date}\n"
-        )
-
+        content = (f"Creator: {creator_name}\nMonthly Views: {monthly_views}\nSubscribers: {subscribers}\nDate: {current_date}\n")
         downloads_path = Path.home() / "Downloads"
         date_for_filename = current_date.replace(":", "-") if current_date else "nodate"
         file_name = f"report_{creator_name}_{date_for_filename}.txt"
         file_path = downloads_path / file_name
-
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
-
-        print(f"File created successfully {file_path}")
+        print(f"📄 File created successfully: {file_path}")
         return {"adSense_status": adSense_status, "date": current_date}
-
-        
