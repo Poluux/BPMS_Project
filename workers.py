@@ -29,14 +29,16 @@ def register_tasks(worker: ZeebeWorker):
             print("✅ Channel is compliant")
         return {"compliance_status": compliance_status}
 
+    from pyzeebe import ZeebeWorker, BpmnError
+
+def register_tasks(worker: ZeebeWorker):
+
     @worker.task(task_type="sendRecommendation.result")
     def process_sendgrid_result(subject: str, sendgrid_result: dict = None):
         if not subject or subject.strip() == "":
             print("[Script Task] Subject vide ! Renvoi vers Write recommendations.")
-            return {
-                "emailStatus": "retry",
-                "emailMessageId": None
-            }
+            # 🔥 Déclenche une erreur BPMN avec un code spécifique
+            raise BpmnError("INVALID_SUBJECT", "Le sujet de l'email est vide.")
 
         status = "failed"
         message_id = None
@@ -50,6 +52,7 @@ def register_tasks(worker: ZeebeWorker):
             "emailStatus": status,
             "emailMessageId": message_id
         }
+
     
     # Script to check AdSense link is good + call an API to get the date + create file with creator information
     @worker.task(task_type="check-AdSense")
