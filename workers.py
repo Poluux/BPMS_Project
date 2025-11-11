@@ -1,5 +1,7 @@
 from pyzeebe import ZeebeWorker
 import re
+from pathlib import Path
+import requests
 
 banned_words = ["hate", "violence", "nsfw", "fake", "scam"]
 banned_categories = ["health", "finance"]
@@ -58,3 +60,47 @@ def register_tasks(worker: ZeebeWorker):
             "emailStatus": status,
             "emailMessageId": message_id
         }
+    
+    # Script to check AdSense link is good + call an API to get the date + create file with creator information
+    @worker.task(task_type="checkAdSense")
+    def checkAdSense_callDateWebAPI_createFile(full_name: str, card_number: str, activate_checkbox: bool, creator_name: str, monthly_views: int, subscribers: int):
+        adSense_status = None
+        current_date = None
+
+        # Checking information
+        if(full_name != None and card_number != None and activate_checkbox == True):
+            adSense_status = True
+            print("All fields are completed and checkboxe is checked, Monetization is activated")
+        else:
+            adSense_status = False
+            print("Some fields are empty or the checkboxe was not checked")
+
+        # Web API call to get current date
+        try:
+            response = requests.get("http://worldclockapi.com/api/json/utc/now")
+            response.raise_for_status()
+            data = response.json()
+            current_date = data.get("currentDateTime", "unknown-date")
+        except Exception as e:
+            print(f"❌ Error fetching date: {e}")
+
+        # Creation of file output
+        content = (
+        f"Creator: {creator_name}\n"
+        f"Monthly Views: {monthly_views}\n"
+        f"Subscribers: {subscribers}\n"
+        f"Date: {current_date}\n"
+        )
+
+        downloads_path = Path.home() / "Downloads"
+        date_for_filename = current_date.replace(":", "-") if current_date else "nodate"
+        file_name = f"report_{creator_name}_{date_for_filename}.txt"
+        file_path = downloads_path / file_name
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        print(f"File created successfully {file_path}")
+        return {"adSense_status": adSense_status, "date": current_date}
+
+        
