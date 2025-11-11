@@ -1,7 +1,9 @@
-from pyzeebe import ZeebeWorker
+from pyzeebe import ZeebeWorker 
 import re
 from pathlib import Path
 import requests
+from pyzeebe.errors import ZeebeError
+
 
 banned_words = ["hate", "violence", "nsfw", "fake", "scam"]
 banned_categories = ["health", "finance"]
@@ -27,22 +29,19 @@ def register_tasks(worker: ZeebeWorker):
             print(f"Category '{channel_category}' restricted")
         print(f"✅ Compliance result: {compliance_status}")
         return {"compliance_status": compliance_status}
+    
 
     @worker.task(task_type="sendRecommendation.result")
     def process_sendgrid_result(subject: str, sendgrid_result: dict = None):
         if not subject or subject.strip() == "":
-            print("[Script Task] Subject vide ! Renvoi vers Write recommendations.")
-            # Lever une exception standard
-            raise Exception("INVALID_SUBJECT: subject is empty")
+            print("[Script Task] Subject vide ! Redirection vers Error End Event.")
+            return {"subject_status": "empty"}  # renvoie une chaîne de caractères
 
-        status = "failed"
-        message_id = None
-        if sendgrid_result and isinstance(sendgrid_result, dict) and sendgrid_result.get("status") == "success":
-            status = "success"
-            message_id = sendgrid_result.get("message_id")
+        print("[Script Task] Subject valide. Envoi normal.")
+        return {"subject_status": "ok"}
 
-        print(f"[Script Task] Email send status: {status}, message_id: {message_id}")
-        return {"emailStatus": status, "emailMessageId": message_id}
+
+
 
     @worker.task(task_type="check-AdSense")
     def checkAdSense_callDateWebAPI_createFile(full_name: str, card_number: str, activate_checkbox: bool, creator_name: str, monthly_views: int, subscribers: int):
