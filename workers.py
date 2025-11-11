@@ -70,7 +70,7 @@ def register_tasks(worker: ZeebeWorker):
             response = requests.get("http://worldclockapi.com/api/json/utc/now")
             response.raise_for_status()
             data = response.json()
-            current_date = data.get("currentDateTime", "unknown-date")
+            current_date = data.get("currentDateTime")
         except Exception as e:
             print(f"❌ Error fetching date: {e}")
 
