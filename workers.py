@@ -3,6 +3,13 @@ import re
 from pathlib import Path
 import requests
 from pyzeebe.errors import ZeebeError
+import mysql.connector
+from pyzeebe import ZeebeClient, create_camunda_cloud_channel
+import uuid
+import os
+from email.message import EmailMessage
+import smtplib
+import asyncio
 
 
 banned_words = ["hate", "violence", "nsfw", "fake", "scam"]
@@ -42,7 +49,7 @@ def register_tasks(worker: ZeebeWorker):
 
 
 
-
+    """"
     @worker.task(task_type="check-AdSense")
     def checkAdSense_callDateWebAPI_createFile(full_name: str, card_number: str, activate_checkbox: bool, creator_name: str, monthly_views: int, subscribers: int):
         adSense_status = True if (full_name and card_number and activate_checkbox) else False
@@ -66,3 +73,212 @@ def register_tasks(worker: ZeebeWorker):
             f.write(content)
         print(f"📄 File created successfully: {file_path}")
         return {"adSense_status": adSense_status, "date": current_date}
+
+        """
+    
+
+    @worker.task(task_type="check-AdSense")
+    def checkAdSense_callDateWebAPI_createFile(
+        full_name: str,
+        textfield_3f52r: str,
+        number_8rp7aj: int,
+        select_jepknc: str,
+        card_number: str,
+        activate_checkbox: bool
+    ):
+        from pathlib import Path
+        import requests
+        import mysql.connector
+        from datetime import datetime
+
+        print(f"Variables reçues : full_name={full_name}, firstname={textfield_3f52r}, age={number_8rp7aj}, lang={select_jepknc}, iban={card_number}, checkbox={activate_checkbox}")
+
+        # ---- Vérification des champs ----
+        def is_filled(value):
+            return value is not None and str(value).strip() != ""
+
+        all_filled = all([
+            is_filled(full_name),
+            is_filled(textfield_3f52r),
+            is_filled(number_8rp7aj),
+            is_filled(card_number)
+        ])
+
+        if not all_filled:
+            print("❌ Certains champs du formulaire sont vides.")
+            return {"adSense_status": False, "reason": "missing_fields"}
+
+        if not activate_checkbox:
+            print("❌ La case 'Activate AdSense' n’est pas cochée.")
+            return {"adSense_status": False, "reason": "checkbox_unchecked"}
+
+        # ---- Vérification IBAN unique ----
+        try:
+            conn = mysql.connector.connect(
+                host="localhost",
+                user="camunda_user",
+                password="mdp_camunda",
+                database="BpmnDataBase"
+            )
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM adsense_form WHERE iban_number = %s", (card_number,))
+            if cursor.fetchone()[0] > 0:
+                cursor.close()
+                conn.close()
+                print(f"❌ IBAN déjà existant : {card_number}")
+                return {"adSense_status": False, "reason": "iban_exists"}
+            cursor.close()
+            conn.close()
+        except mysql.connector.Error as err:
+            print(f"⚠️ Erreur MySQL : {err}")
+            return {"adSense_status": False, "reason": "db_error"}
+
+        print("✅ Toutes les conditions sont remplies. AdSense activé.")
+
+        # ---- Récupération sécurisée de la date ----
+        try:
+            response = requests.get("http://worldtimeapi.org/api/timezone/Etc/UTC", timeout=5)
+            response.raise_for_status()
+            data = response.json()
+            current_date = data.get("datetime")
+            if not current_date:
+                raise ValueError("Date field empty")
+        except Exception as e:
+            print(f"⚠️ Impossible de récupérer la date via l'API, fallback à la date locale. Détail: {e}")
+            current_date = datetime.utcnow().isoformat()  # UTC fallback
+
+        # ---- Création du fichier de log ----
+        safe_date = current_date.replace(":", "-")  # pour le nom de fichier
+        downloads_path = Path.home() / "Downloads"
+        file_name = f"report_{full_name}_{safe_date}.txt"
+        file_path = downloads_path / file_name
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(
+                f"Full Name: {full_name}\n"
+                f"First Name: {textfield_3f52r}\n"
+                f"Age: {number_8rp7aj}\n"
+                f"Language: {select_jepknc}\n"
+                f"IBAN: {card_number}\n"
+                f"Date: {current_date}\n"
+            )
+
+        print(f"📄 Fichier créé : {file_path}")
+
+        # ---- Retour pour la gateway ----
+        return {"adSense_status": True, "date": current_date}
+
+
+    @worker.task(task_type="insert-into-db")
+    def insert_into_db(full_name: str, textfield_3f52r: str, number_8rp7aj: int, select_jepknc: str, card_number: str):
+        """
+        Insère dans la base MySQL toutes les infos du formulaire AdSense.
+        Le champ activate_checkbox n'est pas stocké.
+        """
+        try:
+            # Connexion MySQL
+            conn = mysql.connector.connect(
+                host="localhost",
+                user="camunda_user",
+                password="mdp_camunda",
+                database="BpmnDataBase"
+            )
+
+            cursor = conn.cursor()
+
+            # Requête SQL
+            sql = """
+                INSERT INTO adsense_form (surname, firstname, age, language, iban_number)
+                VALUES (%s, %s, %s, %s, %s)
+            """
+
+            values = (full_name, textfield_3f52r, number_8rp7aj, select_jepknc, card_number)
+
+            cursor.execute(sql, values)
+            conn.commit()
+
+            print(f"✅ Data inserted: {values}")
+
+            cursor.close()
+            conn.close()
+
+            return {"db_status": "success"}
+
+        except mysql.connector.Error as err:
+            print(f"❌ Database error: {err}")
+            return {"db_status": "error", "error_msg": str(err)}
+        
+
+    @worker.task(task_type="submit_form")
+    async def submit_form(formId: str = None, **form_data):
+        # Génération d'un formId si absent
+        if not formId:
+            formId = str(uuid.uuid4())
+
+        print(f"🚀 Envoi du message pour Pool 2 avec formId={formId}")
+        print(f"📦 Données transmises : {form_data}")
+
+        # Création du client Zeebe
+        channel = create_camunda_cloud_channel(
+            client_id=os.environ["ZEEBE_CLIENT_ID"],
+            client_secret=os.environ["ZEEBE_CLIENT_SECRET"],
+            cluster_id=os.environ["ZEEBE_ADDRESS"].split(".")[0],
+            region="bru-2"
+        )
+        client = ZeebeClient(channel)
+
+        # Publication du message
+        await client.publish_message(
+            name="form_submitted",   # messageRef du start event de Pool 2
+            correlation_key=formId,  # clé de corrélation
+            variables=form_data      # variables du formulaire
+        )
+
+        print("✅ Message envoyé à Pool 2 avec succès.")
+        return {"pool2_started": True, "formId": formId}
+    
+
+    @worker.task(task_type="email_sent")
+    async def send_email_task(
+        formId: str,
+        creator_email: str,
+        subject: str = "Votre formulaire a été traité",
+        body: str = "Bonjour, votre formulaire a bien été traité."
+    ):
+        print(f"📧 Envoi du mail pour formId={formId} à {creator_email}")
+
+        try:
+            # --- Envoi de l'email ---
+            msg = EmailMessage()
+            msg['From'] = os.environ['EMAIL_SENDER']
+            msg['To'] = creator_email
+            msg['Subject'] = subject
+            msg.set_content(body)
+
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+                smtp.login(os.environ['EMAIL_SENDER'], os.environ['EMAIL_PASSWORD'])
+                smtp.send_message(msg)
+
+            print("✅ Mail envoyé avec succès")
+
+        except Exception as e:
+            print(f"❌ Erreur lors de l'envoi du mail : {e}")
+            raise e  # retry automatique par Zeebe
+
+        # --- Publier un message de confirmation vers Pool 1 ---
+        channel = create_camunda_cloud_channel(
+            client_id=os.environ["ZEEBE_CLIENT_ID"],
+            client_secret=os.environ["ZEEBE_CLIENT_SECRET"],
+            cluster_id=os.environ["ZEEBE_ADDRESS"].split(".")[0],
+            region="bru-2"
+        )
+        client = ZeebeClient(channel)
+
+        await client.publish_message(
+            name="mail_sent_confirmation",   # doit correspondre au message attendu par Pool 1
+            correlation_key=formId,          # identifie l'instance de Pool 1
+            variables={"status": "done"}     # optionnel, juste pour signaler
+        )
+
+        print(f"🔄 Message 'mail_sent_confirmation' envoyé à Pool 1 pour formId={formId}")
+        return {"email_status": "sent", "formId": formId}
