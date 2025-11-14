@@ -49,7 +49,7 @@ def run_worker():
     client = ZeebeClient(channel)
     worker = ZeebeWorker(channel)
 
-    register_tasks(worker)
+    register_tasks(worker, client)
 
     print("Zeebe worker started")
     zeebe_loop.run_until_complete(worker.work())
